@@ -1,221 +1,193 @@
-name: Build OpenWrt SDK & Packages from Commit
+name: Build OpenWrt SDK and Packages
 
-  on:
-    workflow_dispatch:
-      inputs:
-        openwrt_repo:
-          description: "OpenWrt 源码仓库地址"
-          required: true
-          default: "https://github.com/openwrt/openwrt.git"
-        openwrt_commit:
-          description: "OpenWrt 提交（commit / tag），默认与你当前固件对应"
-          required: true
-          default: "38c150612c"
-        target:
-          description: "目标 (TARGET/SUBTARGET)，例如 mediatek/filogic"
-          required: true
-          default: "mediatek/filogic"
-        arch:
-          description: "架构 (DISTRIB_ARCH)，例如 aarch64_cortex-a53"
-          required: true
-          default: "aarch64_cortex-a53"
-        packages:
-          description: "要编译的包（空格分隔）"
-          required: true
-          default: "ipset iptables-mod-tproxy iptables-mod-extra kmod-tun kmod-inet-diag kmod-nft-tproxy dnsmasq-full"
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_repo:
+        description: "OpenWrt repo URL"
+        required: true
+        default: "https://github.com/openwrt/openwrt.git"
+      openwrt_commit:
+        description: "OpenWrt commit or tag"
+        required: true
+        default: "38c150612c"
+      target:
+        description: "Target (e.g. mediatek/filogic)"
+        required: true
+        default: "mediatek/filogic"
+      arch:
+        description: "Architecture (e.g. aarch64_cortex-a53)"
+        required: true
+        default: "aarch64_cortex-a53"
+      packages:
+        description: "Packages to build (space separated)"
+        required: true
+        default: "ipset iptables-mod-tproxy iptables-mod-extra kmod-tun kmod-inet-diag kmod-nft-tproxy dnsmasq-full"
 
-  jobs:
-    build:
-      runs-on: ubuntu-latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Checkout this repo
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
 
-        - name: Install build dependencies
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              build-essential gcc g++ libncurses5-dev zlib1g-dev gawk gettext unzip file \
-              libssl-dev python3-distutils rsync wget git
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential gcc g++ libncurses5-dev zlib1g-dev gawk gettext unzip file \
+            libssl-dev python3-distutils rsync wget git
 
-        - name: Clone OpenWrt source at specified commit
-          run: |
-            git clone ${{ github.event.inputs.openwrt_repo }} openwrt
-            cd openwrt
-            git fetch --all
-            git checkout ${{ github.event.inputs.openwrt_commit }}
-            echo "Checked out commit:"
-            git log -1 --oneline
+      - name: Clone OpenWrt source at specified commit
+        run: |
+          git clone "${{ github.event.inputs.openwrt_repo }}" openwrt
+          cd openwrt
+          git fetch --all
+          git checkout "${{ github.event.inputs.openwrt_commit }}"
+          git log -1 --oneline
 
-        - name: Configure target for SDK build
-          run: |
-            cd openwrt
-            TARGET="${{ github.event.inputs.target }}"
-            TARGET_FAMILY="${TARGET%/*}"
-            SUBTARGET="${TARGET#*/}"
+      - name: Configure target for SDK build
+        run: |
+          cd openwrt
+          TARGET="${{ github.event.inputs.target }}"
+          TARGET_FAMILY="${TARGET%/*}"
+          SUBTARGET="${TARGET#*/}"
 
-            echo "TARGET_FAMILY=$TARGET_FAMILY"
-            echo "SUBTARGET=$SUBTARGET"
+          echo "CONFIG_TARGET_${TARGET_FAMILY}=y" > .config
+          echo "CONFIG_TARGET_${TARGET_FAMILY}_${SUBTARGET}=y" >> .config
 
-            # 最小配置：指定目标/子目标
-            cat > .config <<EOF
-  CONFIG_TARGET_${TARGET_FAMILY}=y
-  CONFIG_TARGET_${TARGET_FAMILY}_${SUBTARGET}=y
-  EOF
+          make defconfig
 
-            # 生成完整默认配置
-            make defconfig
+      - name: Build tools, toolchain and SDK
+        run: |
+          cd openwrt
 
-        - name: Build tools, toolchain and SDK
-          run: |
-            cd openwrt
-            # 这一步比较耗时，首次构建可能要 1~2 小时
-            make tools/install -j$(nproc) V=sc
-            make toolchain/install -j$(nproc) V=sc
-            make target/sdk -j$(nproc) V=sc
+          make tools/install -j"$(nproc)" V=sc
+          make toolchain/install -j"$(nproc)" V=sc
+          make target/sdk -j"$(nproc)" V=sc
 
-            TARGET="${{ github.event.inputs.target }}"
-            TARGET_FAMILY="${TARGET%/*}"
-            SUBTARGET="${TARGET#*/}"
+          TARGET="${{ github.event.inputs.target }}"
+          TARGET_FAMILY="${TARGET%/*}"
+          SUBTARGET="${TARGET#*/}"
 
-            SDK_TARBALL=$(ls bin/targets/$TARGET_FAMILY/$SUBTARGET/openwrt-sdk-*.tar.xz | head -n1 || true)
-            if [ -z "$SDK_TARBALL" ]; then
-              echo "ERROR: SDK tarball not found under bin/targets/$TARGET_FAMILY/$SUBTARGET/"
-              exit 1
-            fi
+          SDK_TARBALL=$(ls bin/targets/"$TARGET_FAMILY"/"$SUBTARGET"/openwrt-sdk-*.tar.xz | head -n1 || true)
+          if [ -z "$SDK_TARBALL" ]; then
+            echo "ERROR: SDK tarball not found under bin/targets/$TARGET_FAMILY/$SUBTARGET/"
+            exit 1
+          fi
 
-            echo "SDK_TARBALL=$SDK_TARBALL" >> $GITHUB_ENV
-            echo "Found SDK: $SDK_TARBALL"
+          echo "SDK_TARBALL=$SDK_TARBALL" >> "$GITHUB_ENV"
+          echo "Found SDK: $SDK_TARBALL"
 
-        - name: Extract SDK
-          run: |
-            cd openwrt
-            tar -Jxf "$SDK_TARBALL" -C ..
-            SDK_DIR=$(cd .. && ls -d openwrt-sdk-* | head -n1)
-            echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
-            echo "Using SDK dir: $SDK_DIR"
+      - name: Extract SDK
+        run: |
+          cd openwrt
+          tar -Jxf "$SDK_TARBALL" -C ..
+          cd ..
+          SDK_DIR=$(ls -d openwrt-sdk-* | head -n1)
+          echo "SDK_DIR=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "Using SDK dir: $SDK_DIR"
 
-        - name: Prepare SDK feeds
-          run: |
-            cd "$SDK_DIR"
-            ./scripts/feeds update -a
-            # 先安装所有 feeds 包的索引，以便后面按包名编译
-            ./scripts/feeds install -a
+      - name: Prepare SDK feeds
+        run: |
+          cd "$SDK_DIR"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-        - name: Configure packages in SDK
-          run: |
-            cd "$SDK_DIR"
+      - name: Configure packages in SDK
+        run: |
+          cd "$SDK_DIR"
 
-            # 生成基础默认配置
-            rm -f .config
-            make defconfig
+          rm -f .config
+          make defconfig
 
-            PKGLIST="${{ github.event.inputs.packages }}"
-            echo "Packages to build: $PKGLIST"
+          PKGLIST="${{ github.event.inputs.packages }}"
+          echo "Packages to build: $PKGLIST"
 
-            # 为每个包添加 CONFIG_PACKAGE_*=m
-            # 特别处理若干特殊包（kmod-*, iptables-mod-*, dnsmasq-full）
-            KMOD_PKGS=""
-            IPTABLES_EXTRA=0
-            DNSMASQ_FULL=0
-            BASE_PKGS=""
+          KMOD_PKGS=""
+          IPTABLES_EXTRA=0
+          DNSMASQ_FULL=0
+          BASE_PKGS=""
 
-            for pkg in $PKGLIST; do
-              case "$pkg" in
-                kmod-*)
-                  KMOD_PKGS="$KMOD_PKGS $pkg"
-                  echo "CONFIG_PACKAGE_${pkg}=m" >> .config
-                  ;;
-                iptables-mod-*)
-                  IPTABLES_EXTRA=1
-                  echo "CONFIG_PACKAGE_${pkg}=m" >> .config
-                  echo "CONFIG_PACKAGE_iptables=m" >> .config
-                  ;;
-                dnsmasq-full)
-                  DNSMASQ_FULL=1
-                  echo "CONFIG_PACKAGE_dnsmasq=m" >> .config
-                  echo "CONFIG_PACKAGE_dnsmasq-full=m" >> .config
-                  ;;
-                *)
-                  BASE_PKGS="$BASE_PKGS $pkg"
-                  echo "CONFIG_PACKAGE_${pkg}=m" >> .config
-                  ;;
-              esac
-            done
+          for pkg in $PKGLIST; do
+            case "$pkg" in
+              kmod-*)
+                KMOD_PKGS="$KMOD_PKGS $pkg"
+                echo "CONFIG_PACKAGE_${pkg}=m" >> .config
+                ;;
+              iptables-mod-*)
+                IPTABLES_EXTRA=1
+                echo "CONFIG_PACKAGE_${pkg}=m" >> .config
+                echo "CONFIG_PACKAGE_iptables=m" >> .config
+                ;;
+              dnsmasq-full)
+                DNSMASQ_FULL=1
+                echo "CONFIG_PACKAGE_dnsmasq=m" >> .config
+                echo "CONFIG_PACKAGE_dnsmasq-full=m" >> .config
+                ;;
+              *)
+                BASE_PKGS="$BASE_PKGS $pkg"
+                echo "CONFIG_PACKAGE_${pkg}=m" >> .config
+                ;;
+            esac
+          done
 
-            echo "=== Added package configs ==="
-            grep '^CONFIG_PACKAGE_' .config || true
+          make defconfig
 
-            # 展开最终配置
-            make defconfig
+          echo "KMOD_PKGS=$KMOD_PKGS" >> "$GITHUB_ENV"
+          echo "BASE_PKGS=$BASE_PKGS" >> "$GITHUB_ENV"
+          echo "IPTABLES_EXTRA=$IPTABLES_EXTRA" >> "$GITHUB_ENV"
+          echo "DNSMASQ_FULL=$DNSMASQ_FULL" >> "$GITHUB_ENV"
 
-            echo "KMOD_PKGS=$KMOD_PKGS" >> $GITHUB_ENV
-            echo "BASE_PKGS=$BASE_PKGS" >> $GITHUB_ENV
-            echo "IPTABLES_EXTRA=$IPTABLES_EXTRA" >> $GITHUB_ENV
-            echo "DNSMASQ_FULL=$DNSMASQ_FULL" >> $GITHUB_ENV
+      - name: Build selected packages in SDK
+        run: |
+          cd "$SDK_DIR"
 
-        - name: Build selected packages in SDK
-          run: |
-            cd "$SDK_DIR"
+          TARGET="${{ github.event.inputs.target }}"
+          TARGET_FAMILY="${TARGET%/*}"
+          SUBTARGET="${TARGET#*/}"
 
-            TARGET="${{ github.event.inputs.target }}"
-            TARGET_FAMILY="${TARGET%/*}"
-            SUBTARGET="${TARGET#*/}"
+          if [ -n "$KMOD_PKGS" ]; then
+            make package/kernel/linux/compile -j"$(nproc)" V=sc
+          fi
 
-            echo "Building packages for $TARGET_FAMILY/$SUBTARGET"
+          if [ "$IPTABLES_EXTRA" = "1" ]; then
+            make package/iptables/compile -j"$(nproc)" V=sc
+          fi
 
-            # 先构建内核模块所在的 linux 包（如果有 kmod 需求）
-            if [ -n "$KMOD_PKGS" ]; then
-              echo "=== Building kernel modules (package/kernel/linux) ==="
-              make package/kernel/linux/compile -j$(nproc) V=sc
-            fi
+          if [ "$DNSMASQ_FULL" = "1" ]; then
+            make package/dnsmasq/compile -j"$(nproc)" V=sc
+          fi
 
-            # 如果有 iptables 模块，编译 iptables 包
-            if [ "$IPTABLES_EXTRA" = "1" ]; then
-              echo "=== Building iptables and its extra modules ==="
-              make package/iptables/compile -j$(nproc) V=sc
-            fi
+          for pkg in $BASE_PKGS; do
+            make "package/$pkg/compile" -j"$(nproc)" V=sc || true
+          done
 
-            # 如果需要 dnsmasq-full，编译 dnsmasq 包
-            if [ "$DNSMASQ_FULL" = "1" ]; then
-              echo "=== Building dnsmasq and dnsmasq-full ==="
-              make package/dnsmasq/compile -j$(nproc) V=sc
-            fi
+      - name: Collect .ipk artifacts
+        run: |
+          cd "$SDK_DIR"
+          mkdir -p /tmp/ipk
 
-            # 其它普通包：尝试用 package/<name>/compile 方式编译
-            for pkg in $BASE_PKGS; do
-              echo "=== Building package: $pkg ==="
-              make package/$pkg/compile -j$(nproc) V=sc || true
-            done
+          ARCH="${{ github.event.inputs.arch }}"
+          TARGET="${{ github.event.inputs.target }}"
+          TARGET_FAMILY="${TARGET%/*}"
+          SUBTARGET="${TARGET#*/}"
 
-        - name: Collect .ipk artifacts
-          run: |
-            cd "$SDK_DIR"
-            mkdir -p /tmp/ipk
+          if [ -d "bin/packages/$ARCH" ]; then
+            find "bin/packages/$ARCH" -maxdepth 3 -name '*.ipk' -exec cp -a {} /tmp/ipk/ \;
+          fi
 
-            ARCH="${{ github.event.inputs.arch }}"
-            TARGET="${{ github.event.inputs.target }}"
-            TARGET_FAMILY="${TARGET%/*}"
-            SUBTARGET="${TARGET#*/}"
+          if [ -d "bin/targets/$TARGET_FAMILY/$SUBTARGET" ]; then
+            find "bin/targets/$TARGET_FAMILY/$SUBTARGET" -name '*.ipk' -exec cp -a {} /tmp/ipk/ \;
+          fi
 
-            echo "Collecting .ipk for ARCH=$ARCH TARGET=$TARGET_FAMILY/$SUBTARGET"
+          ls -l /tmp/ipk || true
 
-            # 普通 packages (base/packages/routing/...)
-            if [ -d "bin/packages/$ARCH" ]; then
-              find "bin/packages/$ARCH" -maxdepth 3 -name '*.ipk' -exec cp -a {} /tmp/ipk/ \; || true
-            fi
+      - name: Upload .ipk as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-ipks
+          path: /tmp/ipk/*.ipk
 
-            # 内核模块等在 targets 路径
-            if [ -d "bin/targets/$TARGET_FAMILY/$SUBTARGET" ]; then
-              find "bin/targets/$TARGET_FAMILY/$SUBTARGET" -name '*.ipk' -exec cp -a {} /tmp/ipk/ \; || true
-            fi
 
-            echo "=== Collected .ipk files ==="
-            ls -l /tmp/ipk || true
-
-        - name: Upload .ipk as artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: openwrt-ipks
-            path: /tmp/ipk/*.ipk
