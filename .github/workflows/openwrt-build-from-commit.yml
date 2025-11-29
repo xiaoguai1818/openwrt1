@@ -22,7 +22,7 @@ on:
       packages:
         description: "Packages to build (space separated)"
         required: true
-        default: "ipset iptables-mod-tproxy iptables-mod-extra kmod-tun kmod-inet-diag kmod-nft-tproxy dnsmasq-full"
+        default: "luci luci-base luci-compat dnsmasq-full bash curl ca-bundle ip-full ipset ruby ruby-yaml unzip iptables kmod-ipt-nat iptables-mod-tproxy iptables-mod-extra ip6tables-mod-nat kmod-tun kmod-inet-diag kmod-nft-tproxy luci-app-openclash luci-app-ssr-plus"
 
 jobs:
   build:
@@ -63,9 +63,9 @@ jobs:
         run: |
           cd openwrt
 
-          make tools/install -j"$(nproc)" V=sc
-          make toolchain/install -j"$(nproc)" V=sc
-          make target/sdk -j"$(nproc)" V=sc
+          make tools/install -j"$(nproc)" V=s
+          make toolchain/install -j"$(nproc)" V=s
+          make target/sdk -j"$(nproc)" V=s
 
           TARGET="${{ github.event.inputs.target }}"
           TARGET_FAMILY="${TARGET%/*}"
@@ -95,6 +95,18 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Clone OpenClash and helloworld packages
+        run: |
+          cd "$SDK_DIR"
+          mkdir -p package/extra
+          cd package/extra
+          if [ ! -d OpenClash ]; then
+            git clone --depth 1 https://github.com/vernesong/OpenClash.git
+          fi
+          if [ ! -d helloworld ]; then
+            git clone --depth 1 https://github.com/fw876/helloworld.git
+          fi
+
       - name: Configure packages in SDK
         run: |
           cd "$SDK_DIR"
@@ -116,7 +128,7 @@ jobs:
                 KMOD_PKGS="$KMOD_PKGS $pkg"
                 echo "CONFIG_PACKAGE_${pkg}=m" >> .config
                 ;;
-              iptables-mod-*)
+              iptables | ip6tables | iptables-mod-* | ip6tables-*)
                 IPTABLES_EXTRA=1
                 echo "CONFIG_PACKAGE_${pkg}=m" >> .config
                 echo "CONFIG_PACKAGE_iptables=m" >> .config
@@ -139,6 +151,17 @@ jobs:
           echo "BASE_PKGS=$BASE_PKGS" >> "$GITHUB_ENV"
           echo "IPTABLES_EXTRA=$IPTABLES_EXTRA" >> "$GITHUB_ENV"
           echo "DNSMASQ_FULL=$DNSMASQ_FULL" >> "$GITHUB_ENV"
+
+          echo "Final CONFIG_PACKAGE entries:"
+          grep '^CONFIG_PACKAGE_' .config || true
+
+          cp .config /tmp/openwrt-sdk.config
+
+      - name: Upload .config as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-config
+          path: /tmp/openwrt-sdk.config
 
       - name: Build selected packages in SDK
         run: |
