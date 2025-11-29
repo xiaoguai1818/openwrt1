@@ -22,7 +22,7 @@ on:
       packages:
         description: "Packages to build (space separated)"
         required: true
-        default: "luci luci-base luci-compat dnsmasq-full bash curl ca-bundle ip-full ipset ruby ruby-yaml unzip iptables kmod-ipt-nat iptables-mod-tproxy iptables-mod-extra ip6tables-mod-nat kmod-tun kmod-inet-diag kmod-nft-tproxy luci-app-openclash luci-app-ssr-plus"
+        default: "luci luci-base luci-compat dnsmasq-full bash curl ca-bundle coreutils coreutils-nohup libcap-bin ip-full ipset ruby ruby-yaml unzip iptables ip6tables iptables-mod-tproxy iptables-mod-extra kmod-ipt-nat ip6tables-mod-nat kmod-tun kmod-inet-diag kmod-nft-tproxy ddns-scripts luci-app-ddns luci-app-openclash luci-app-ssr-plus xray-core naiveproxy v2ray-plugin simple-obfs kcptun-client trojan trojan-go shadowsocks-libev-ss-local shadowsocks-libev-ss-redir shadowsocks-libev-ss-server shadowsocks-libev-ss-tunnel shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir shadowsocks-rust-sslocal chinadns-ng dns2socks dns2tcp pdnsd-alt ipt2socks microsocks redsocks2 v2ray-geoip v2ray-geosite"
 
 jobs:
   build:
@@ -145,6 +145,27 @@ jobs:
             esac
           done
 
+          # Enable common luci-app-ssr-plus core backends and helpers
+          cat >> .config <<'EOF'
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ShadowsocksR=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_Rust=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan_GO=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_NaiveProxy=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Kcptun=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Simple_Obfs=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray_Plugin=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2SOCKS=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2TCP=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_PDNSD=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ChinaDNS_NG=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_IPT2Socks=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Redsocks2=y
+CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Microsocks=y
+EOF
+
           make defconfig
 
           echo "KMOD_PKGS=$KMOD_PKGS" >> "$GITHUB_ENV"
@@ -166,26 +187,7 @@ jobs:
       - name: Build selected packages in SDK
         run: |
           cd "$SDK_DIR"
-
-          TARGET="${{ github.event.inputs.target }}"
-          TARGET_FAMILY="${TARGET%/*}"
-          SUBTARGET="${TARGET#*/}"
-
-          if [ -n "$KMOD_PKGS" ]; then
-            make package/kernel/linux/compile -j"$(nproc)" V=sc
-          fi
-
-          if [ "$IPTABLES_EXTRA" = "1" ]; then
-            make package/iptables/compile -j"$(nproc)" V=sc
-          fi
-
-          if [ "$DNSMASQ_FULL" = "1" ]; then
-            make package/dnsmasq/compile -j"$(nproc)" V=sc
-          fi
-
-          for pkg in $BASE_PKGS; do
-            make "package/$pkg/compile" -j"$(nproc)" V=sc || true
-          done
+          make package/compile -j"$(nproc)" V=s
 
       - name: Collect .ipk artifacts
         run: |
