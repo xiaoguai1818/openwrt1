@@ -56,6 +56,7 @@ jobs:
 
           echo "CONFIG_TARGET_${TARGET_FAMILY}=y" > .config
           echo "CONFIG_TARGET_${TARGET_FAMILY}_${SUBTARGET}=y" >> .config
+          echo "CONFIG_SDK=y" >> .config
 
           make defconfig
 
