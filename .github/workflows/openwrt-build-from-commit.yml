@@ -146,25 +146,25 @@ jobs:
           done
 
           # Enable common luci-app-ssr-plus core backends and helpers
-          cat >> .config <<'EOF'
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ShadowsocksR=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_Rust=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan_GO=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_NaiveProxy=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Kcptun=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Simple_Obfs=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray_Plugin=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2SOCKS=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2TCP=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_PDNSD=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ChinaDNS_NG=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_IPT2Socks=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Redsocks2=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Microsocks=y
-EOF
+          {
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ShadowsocksR=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_Rust=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan_GO=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_NaiveProxy=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Kcptun=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Simple_Obfs=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray_Plugin=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2SOCKS=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_DNS2TCP=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_PDNSD=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ChinaDNS_NG=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_IPT2Socks=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Redsocks2=y'
+            echo 'CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Microsocks=y'
+          } >> .config
 
           make defconfig
 
