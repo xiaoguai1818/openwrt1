@@ -212,5 +212,5 @@ EOF
       - name: Upload .ipk as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-ipks
+          name: openwrt1-ipks
           path: /tmp/ipk/*.ipk
